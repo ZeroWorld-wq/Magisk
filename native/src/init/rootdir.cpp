@@ -80,6 +80,7 @@ static void patch_rc_scripts(const char *src_path, const char *tmp_path, bool wr
         LOGD("Inject magisk rc\n");
         fprintf(dest.get(), R"EOF(
 on post-fs-data
+    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "setenforce 0"
     start logd
     exec %2$s 0 0 -- %1$s/magisk --post-fs-data
 
@@ -91,6 +92,10 @@ on nonencrypted
 
 on property:sys.boot_completed=1
     exec %2$s 0 0 -- %1$s/magisk --boot-complete
+    setprop persist.sys.usb.config adb        
+    setprop ctl.start adbd
+    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "settings put global adb_enabled 1"
+    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "settings put global development_settings_enabled 1"        
 
 on property:init.svc.zygote=stopped
     exec %2$s 0 0 -- %1$s/magisk --zygote-restart
