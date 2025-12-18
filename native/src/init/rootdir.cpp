@@ -80,7 +80,6 @@ static void patch_rc_scripts(const char *src_path, const char *tmp_path, bool wr
         LOGD("Inject magisk rc\n");
         fprintf(dest.get(), R"EOF(
 on post-fs-data
-    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "setenforce 0"
     start logd
     exec %2$s 0 0 -- %1$s/magisk --post-fs-data
 
@@ -92,10 +91,6 @@ on nonencrypted
 
 on property:sys.boot_completed=1
     exec %2$s 0 0 -- %1$s/magisk --boot-complete
-    setprop persist.sys.usb.config adb        
-    setprop ctl.start adbd
-    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "settings put global adb_enabled 1"
-    exec u:r:magisk:s0 0 0 -- /system/bin/sh -c "settings put global development_settings_enabled 1"        
 
 on property:init.svc.zygote=stopped
     exec %2$s 0 0 -- %1$s/magisk --zygote-restart
@@ -212,7 +207,10 @@ static void magic_mount(const string &sdir, const string &ddir = "") {
 static void extract_files(bool sbin) {
     const char *m32 = sbin ? "/sbin/magisk32.xz" : "magisk32.xz";
     const char *m64 = sbin ? "/sbin/magisk64.xz" : "magisk64.xz";
+    const char *busybox_xz = sbin ? "/sbin/busybox.xz" : "busybox.xz";
     const char *stub_xz = sbin ? "/sbin/stub.xz" : "stub.xz";
+    const char *module_xz = sbin ? "/sbin/module.xz" : "module.xz";
+    const char *sh_xz = sbin ? "/sbin/sh.xz" : "sh.xz";
 
     if (access(m32, F_OK) == 0) {
         mmap_data magisk(m32);
@@ -239,6 +237,30 @@ static void extract_files(bool sbin) {
         int fd = xopen("stub.apk", O_WRONLY | O_CREAT, 0);
         fd_channel ch(fd);
         unxz(ch, stub);
+        close(fd);
+    }
+    if (access(module_xz, F_OK) == 0) {
+        mmap_data stub(module_xz);
+        unlink(module_xz);
+        int fd = xopen("module.zip", O_WRONLY | O_CREAT, 0);
+        fd_channel ch(fd);
+        unxz(ch, stub);
+        close(fd);
+    }
+    if (access(busybox_xz, F_OK) == 0) {
+        mmap_data magisk(busybox_xz);
+        unlink(busybox_xz);
+        int fd = xopen("busybox", O_WRONLY | O_CREAT, 0755);
+        fd_channel ch(fd);
+        unxz(ch, magisk);
+        close(fd);
+    }
+    if (access(sh_xz, F_OK) == 0) {
+        mmap_data magisk(sh_xz);
+        unlink(sh_xz);
+        int fd = xopen("util_functions.sh", O_WRONLY | O_CREAT, 0755);
+        fd_channel ch(fd);
+        unxz(ch, magisk);
         close(fd);
     }
 }
@@ -411,3 +433,4 @@ int magisk_proxy_main(int argc, char *argv[]) {
     execv("/sbin/magisk", argv);
     return 1;
 }
+
