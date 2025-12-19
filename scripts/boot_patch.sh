@@ -176,7 +176,7 @@ if [ -f magisk32 ]; then
   unset SKIP32
 fi
 ./magiskboot compress=xz stub.apk stub.xz
-./magiskboot compress=xz busybox.apk busybox.xz
+./magiskboot compress=xz busybox busybox.xz
 ./magiskboot compress=xz util_functions.sh sh.xz
 
 echo "KEEPVERITY=$KEEPVERITY" > config
